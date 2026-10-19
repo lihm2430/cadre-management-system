@@ -1,0 +1,6 @@
+# 科级干部全周期管理与综合研判系统 运行环境依赖
+PySide6>=6.5.0
+openpyxl>=3.1.0
+python-docx>=0.8.11
+pypdf>=3.9.0
+rapidocr_onnxruntime>=1.3.0
