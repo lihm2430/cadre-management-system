@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 try:
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
     from pypdf import PdfReader
     import docx
     from docx.shared import Pt, Cm, Inches, RGBColor
@@ -4349,14 +4350,38 @@ class CadreStatsDashboard(QDialog):
             ws["A1"].font = Font(name="Microsoft YaHei", size=14, bold=True, color="1F497D")
             ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
+            ws.row_dimensions[1].height = 36
+            ws.row_dimensions[2].height = 20
+            ws.row_dimensions[4].height = 26
+
             h_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
             for cell in ws[4]:
                 cell.fill = h_fill
                 cell.font = Font(name="Microsoft YaHei", size=10, bold=True, color="FFFFFF")
                 cell.alignment = Alignment(horizontal="center", vertical="center")
 
-            for col in ws.columns:
-                ws.column_dimensions[col[0].column_letter].width = 24
+            border_thin = Border(
+                left=Side(style='thin', color='CBD5E1'),
+                right=Side(style='thin', color='CBD5E1'),
+                top=Side(style='thin', color='CBD5E1'),
+                bottom=Side(style='thin', color='CBD5E1')
+            )
+            for row in ws.iter_rows(min_row=4, max_row=ws.max_row, min_col=1, max_col=5):
+                for cell in row:
+                    cell.border = border_thin
+                    if cell.row > 4:
+                        cell.font = Font(name="Microsoft YaHei", size=10)
+                        if cell.column == 1:
+                            cell.alignment = Alignment(horizontal="center", vertical="center")
+                        elif cell.column == 2:
+                            cell.alignment = Alignment(horizontal="left", vertical="center")
+                        else:
+                            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            col_widths = {1: 16, 2: 24, 3: 22, 4: 26, 5: 26}
+            for col_idx in range(1, ws.max_column + 1):
+                col_letter = get_column_letter(col_idx)
+                ws.column_dimensions[col_letter].width = col_widths.get(col_idx, 24)
 
             wb.save(save_path)
             QMessageBox.information(self, "导出成功", f"常委会汇报专用三大板块全景对比报告已导出至：\n{save_path}")
