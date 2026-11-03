@@ -4335,6 +4335,7 @@ class CadreStatsDashboard(QDialog):
                 ("青年梯队", "40岁及以下骨干", fmt(sa['young'], ta), fmt(sad['young'], tad), fmt(sc['young'], tc)),
                 ("性别党派", "女性干部", fmt(sa['female'], ta), fmt(sad['female'], tad), fmt(sc['female'], tc)),
                 ("性别党派", "中共党员", fmt(sa['cpc'], ta), fmt(sad['cpc'], tad), fmt(sc['cpc'], tc)),
+                ("性别党派", "民主党派及无党派群众", fmt(ta - sa['cpc'], ta), fmt(tad - sad['cpc'], tad), fmt(tc - sc['cpc'], tc)),
                 ("学历层次", "博士研究生", fmt(sa['doc'], ta), fmt(sad['doc'], tad), fmt(sc['doc'], tc)),
                 ("学历层次", "硕士研究生", fmt(sa['master'], ta), fmt(sad['master'], tad), fmt(sc['master'], tc)),
                 ("专业职称", "正高级职称", fmt(sa['high_senior'], ta), fmt(sad['high_senior'], tad), fmt(sc['high_senior'], tc)),

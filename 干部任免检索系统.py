@@ -148,15 +148,36 @@ class GlobalAuditWorker(QThread):
             if cadre_file and os.path.exists(cadre_file):
                 wb_c = openpyxl.load_workbook(cadre_file, data_only=True)
                 ws_c = wb_c["干部花名册"] if "干部花名册" in wb_c.sheetnames else wb_c.active
-                for r in range(4, ws_c.max_row + 1):
+                header_r = 3
+                for hr in range(1, 6):
+                    vals = [str(ws_c.cell(row=hr, column=c).value or "").strip() for c in range(1, 25)]
+                    if any("姓名" in v for v in vals):
+                        header_r = hr
+                        break
+                headers_c = [str(ws_c.cell(row=header_r, column=c).value or "").strip() for c in range(1, 25)]
+                pol_idx, pdate_idx = 6, 7
+                for c_idx, h in enumerate(headers_c):
+                    if any(k in h for k in ["政治面貌", "政治"]): pol_idx = c_idx
+                    elif any(k in h for k in ["入党时间", "入党年月", "入党"]): pdate_idx = c_idx
+
+                for r in range(header_r + 1, ws_c.max_row + 1):
                     nm = str(ws_c.cell(row=r, column=2).value or "").replace(" ", "").strip()
                     if nm and nm not in ["姓名", "姓 名"]:
                         if nm not in cadre_base_map: cadre_base_map[nm] = []
+                        raw_pol = ws_c.cell(row=r, column=pol_idx + 1).value
+                        pol_val = str(raw_pol).strip() if raw_pol and str(raw_pol).strip() not in ["None", "—", "-"] else ""
+                        raw_pdate = ws_c.cell(row=r, column=pdate_idx + 1).value
+                        if isinstance(raw_pdate, datetime.datetime):
+                            pdate_val = raw_pdate.strftime("%Y年%m月")
+                        else:
+                            pdate_val = str(raw_pdate).strip() if raw_pdate and str(raw_pdate).strip() not in ["None", "—", "-"] else "—"
                         cadre_base_map[nm].append({
                             "gender": str(ws_c.cell(row=r, column=3).value or "").strip(),
                             "birth": str(ws_c.cell(row=r, column=4).value or "").strip(),
                             "dept_post": str(ws_c.cell(row=r, column=9).value or "").strip(),
                             "level": str(ws_c.cell(row=r, column=10).value or "").strip(),
+                            "politic": pol_val,
+                            "party_date": pdate_val,
                             "full_degree": str(ws_c.cell(row=r, column=11).value or "").strip(),
                             "full_school": str(ws_c.cell(row=r, column=12).value or "").strip(),
                             "job_degree": str(ws_c.cell(row=r, column=13).value or "").strip(),
@@ -381,20 +402,38 @@ class GlobalAuditWorker(QThread):
                             pass
 
                 # 更新该干部底表核准数据
-                c.execute("""UPDATE cadres SET cadre_identity = ?, post_category = ?, phone = ?,
-                             office_phone = ?, office_address = ?, emp_no = ?, id_card = ?,
-                             first_edu_degree = ?, first_edu_school = ?, first_edu_major = ?, first_edu_date = ?,
-                             highest_edu_degree = ?, highest_edu_degree_title = ?, highest_edu_school = ?,
-                             highest_edu_major = ?, highest_edu_date = ?,
-                             full_edu_degree = ?, full_edu_school = ?, job_edu_degree = ?, job_edu_school = ?,
-                             selected_approval_file = ?, family_relations = ?
-                             WHERE id = ?""",
-                          (final_identity, final_post_cat, final_phone,
-                           final_oph, final_oaddr, final_emp_no, final_id_card,
-                           fe_deg or "", fe_sch or "", fe_maj or "", fe_dt or "",
-                           he_deg or "", he_tit or "", he_sch or "", he_maj or "", he_dt or "",
-                           final_full_deg, final_full_sch, final_job_deg, final_job_sch,
-                           final_sel_app, final_fam, cid))
+                if c_match:
+                    c.execute("""UPDATE cadres SET cadre_identity = ?, post_category = ?, phone = ?,
+                                 office_phone = ?, office_address = ?, emp_no = ?, id_card = ?,
+                                 politic = ?, party_date = ?,
+                                 first_edu_degree = ?, first_edu_school = ?, first_edu_major = ?, first_edu_date = ?,
+                                 highest_edu_degree = ?, highest_edu_degree_title = ?, highest_edu_school = ?,
+                                 highest_edu_major = ?, highest_edu_date = ?,
+                                 full_edu_degree = ?, full_edu_school = ?, job_edu_degree = ?, job_edu_school = ?,
+                                 selected_approval_file = ?, family_relations = ?
+                                 WHERE id = ?""",
+                              (final_identity, final_post_cat, final_phone,
+                               final_oph, final_oaddr, final_emp_no, final_id_card,
+                               c_match.get("politic", ""), c_match.get("party_date", "—"),
+                               fe_deg or "", fe_sch or "", fe_maj or "", fe_dt or "",
+                               he_deg or "", he_tit or "", he_sch or "", he_maj or "", he_dt or "",
+                               final_full_deg, final_full_sch, final_job_deg, final_job_sch,
+                               final_sel_app, final_fam, cid))
+                else:
+                    c.execute("""UPDATE cadres SET cadre_identity = ?, post_category = ?, phone = ?,
+                                 office_phone = ?, office_address = ?, emp_no = ?, id_card = ?,
+                                 first_edu_degree = ?, first_edu_school = ?, first_edu_major = ?, first_edu_date = ?,
+                                 highest_edu_degree = ?, highest_edu_degree_title = ?, highest_edu_school = ?,
+                                 highest_edu_major = ?, highest_edu_date = ?,
+                                 full_edu_degree = ?, full_edu_school = ?, job_edu_degree = ?, job_edu_school = ?,
+                                 selected_approval_file = ?, family_relations = ?
+                                 WHERE id = ?""",
+                              (final_identity, final_post_cat, final_phone,
+                               final_oph, final_oaddr, final_emp_no, final_id_card,
+                               fe_deg or "", fe_sch or "", fe_maj or "", fe_dt or "",
+                               he_deg or "", he_tit or "", he_sch or "", he_maj or "", he_dt or "",
+                               final_full_deg, final_full_sch, final_job_deg, final_job_sch,
+                               final_sel_app, final_fam, cid))
 
                 fe_calibrated_count += 1
 
@@ -1847,9 +1886,12 @@ class FullCadreMainWindow(QMainWindow):
             headers_c = [str(cell.value).strip() if cell.value else "" for cell in ws_c[header_row_idx]]
 
             rem1_idx, rem2_idx = -1, -1
+            politic_col_idx, party_date_col_idx = 6, 7
             for idx, h in enumerate(headers_c):
                 if any(k in h for k in ["备注1", "人员身份", "编制", "身份"]): rem1_idx = idx
                 elif any(k in h for k in ["备注2", "岗位类别", "岗位", "管理岗"]): rem2_idx = idx
+                elif any(k in h for k in ["政治面貌", "政治"]): politic_col_idx = idx
+                elif any(k in h for k in ["入党时间", "入党年月", "入党"]): party_date_col_idx = idx
 
             if rem1_idx == -1 and ws_c.max_column >= 20: rem1_idx = 19
             if rem2_idx == -1 and ws_c.max_column >= 21: rem2_idx = 20
@@ -1875,8 +1917,10 @@ class FullCadreMainWindow(QMainWindow):
                 birth = get_dt_str(ws_c.cell(row=r, column=4).value)
                 nation = str(ws_c.cell(row=r, column=5).value or "汉族").strip()
                 native = str(ws_c.cell(row=r, column=6).value or "—").strip()
-                politic = str(ws_c.cell(row=r, column=7).value or "中共党员").strip()
-                party_date = get_dt_str(ws_c.cell(row=r, column=8).value)
+                raw_pol = ws_c.cell(row=r, column=politic_col_idx + 1).value
+                politic = str(raw_pol).strip() if raw_pol and str(raw_pol).strip() not in ["None", "—", "-"] else ""
+                raw_pdate = ws_c.cell(row=r, column=party_date_col_idx + 1).value
+                party_date = get_dt_str(raw_pdate) if raw_pdate and str(raw_pdate).strip() not in ["None", "—", "-"] else "—"
                 dept_post = str(ws_c.cell(row=r, column=9).value or "—").strip()
                 level = str(ws_c.cell(row=r, column=10).value or "—").strip()
 
@@ -1988,11 +2032,13 @@ class FullCadreMainWindow(QMainWindow):
                         new_he_dt  = p_match.get("he_dt") or ""
 
                         c.execute("""UPDATE cadres SET cadre_identity = ?, post_category = ?, phone = ?,
+                                     politic = ?, party_date = ?,
                                      first_edu_degree = ?, first_edu_school = ?, first_edu_major = ?, first_edu_date = ?,
                                      highest_edu_degree = ?, highest_edu_degree_title = ?, highest_edu_school = ?, 
                                      highest_edu_major = ?, highest_edu_date = ?
                                      WHERE id = ?""",
                                   (final_identity, final_post_cat, final_phone,
+                                   politic, party_date,
                                    new_fe_deg, new_fe_sch, new_fe_maj, new_fe_dt,
                                    new_he_deg, new_he_tit, new_he_sch, new_he_maj, new_he_dt, target_id))
                         updated_cnt += 1
@@ -2265,6 +2311,8 @@ class FullCadreMainWindow(QMainWindow):
             birth_idx = get_col_idx(["出生年月", "出生日期", "出生"])
             phone_idx = get_col_idx(["手机", "移动电话", "联系方式"])
             rank_idx = get_col_idx(["层级", "管理层级", "干部层级"])
+            politic_idx = get_col_idx(["政治面貌", "政治", "面貌"])
+            party_date_idx = get_col_idx(["入党时间", "入党年月", "入党"])
 
             if name_idx == -1:
                 QMessageBox.critical(self, "格式错误", "未在 Excel 前 5 行中识别到【姓名】表头！")
@@ -2272,19 +2320,20 @@ class FullCadreMainWindow(QMainWindow):
 
             conn = sqlite3.connect(DB_PATH, timeout=30.0)
             c = conn.cursor()
-            c.execute("SELECT id, name, birth, dept_post, level, phone, cadre_rank, cadre_identity, post_category FROM cadres")
+            c.execute("SELECT id, name, birth, dept_post, level, phone, cadre_rank, cadre_identity, post_category, politic, party_date FROM cadres")
             db_cadres = c.fetchall()
             conn.close()
 
             db_map = {}
             for row in db_cadres:
-                cid, nm, brth, dpost, lvl, ph, rnk, ident, pcat = row
+                cid, nm, brth, dpost, lvl, ph, rnk, ident, pcat, pol_db, pdate_db = row
                 if nm not in db_map:
                     db_map[nm] = []
                 db_map[nm].append({
                     "id": cid, "name": nm, "birth": brth or "", "dept_post": dpost or "",
                     "level": lvl or "", "phone": ph or "", "cadre_rank": rnk or "科级",
-                    "cadre_identity": ident or "", "post_category": pcat or ""
+                    "cadre_identity": ident or "", "post_category": pcat or "",
+                    "politic": pol_db or "", "party_date": pdate_db or "—"
                 })
 
             diff_items = []
@@ -2303,6 +2352,13 @@ class FullCadreMainWindow(QMainWindow):
                 ph = str(ws.cell(row=r, column=phone_idx + 1).value or "—").strip() if phone_idx != -1 else "—"
                 rnk_val = str(ws.cell(row=r, column=rank_idx + 1).value or "").strip() if rank_idx != -1 else ""
                 cadre_rank = rnk_val if rnk_val in ["处级", "科级"] else ("处级" if "处" in lvl or "院长" in dept_post or "书记" in dept_post else "科级")
+                raw_pol = ws.cell(row=r, column=politic_idx + 1).value if politic_idx != -1 else ""
+                pol = str(raw_pol).strip() if raw_pol and str(raw_pol).strip() not in ["None", "—", "-"] else ""
+                raw_pdate = ws.cell(row=r, column=party_date_idx + 1).value if party_date_idx != -1 else ""
+                if isinstance(raw_pdate, datetime.datetime):
+                    pdate = raw_pdate.strftime("%Y年%m月")
+                else:
+                    pdate = str(raw_pdate).strip() if raw_pdate and str(raw_pdate).strip() not in ["None", "—", "-"] else "—"
 
                 cands = db_map.get(name, [])
                 matched_target = None
@@ -2327,7 +2383,8 @@ class FullCadreMainWindow(QMainWindow):
                         "payload": {
                             "action": "insert",
                             "name": name, "gender": gdr, "birth": brth, "phone": ph,
-                            "dept_post": dept_post, "level": lvl, "cadre_rank": cadre_rank
+                            "dept_post": dept_post, "level": lvl, "cadre_rank": cadre_rank,
+                            "politic": pol, "party_date": pdate
                         }
                     })
                 else:
@@ -2339,6 +2396,8 @@ class FullCadreMainWindow(QMainWindow):
                         changes.append(("职级", matched_target["level"], lvl))
                     if is_valid_text(ph) and ph != "—" and ph != matched_target["phone"]:
                         changes.append(("联系电话", matched_target["phone"], ph))
+                    if politic_idx != -1 and pol != matched_target["politic"]:
+                        changes.append(("政治面貌", matched_target["politic"] or "无", pol or "无"))
 
                     if changes:
                         diff_items.append({
@@ -2352,7 +2411,9 @@ class FullCadreMainWindow(QMainWindow):
                                 "id": matched_target["id"],
                                 "dept_post": dept_post if is_valid_text(dept_post) else matched_target["dept_post"],
                                 "level": lvl if is_valid_text(lvl) else matched_target["level"],
-                                "phone": ph if is_valid_text(ph) else matched_target["phone"]
+                                "phone": ph if is_valid_text(ph) else matched_target["phone"],
+                                "politic": pol if politic_idx != -1 else matched_target["politic"],
+                                "party_date": pdate if party_date_idx != -1 else matched_target["party_date"]
                             }
                         })
                     else:
@@ -2390,14 +2451,19 @@ class FullCadreMainWindow(QMainWindow):
             if action == "insert":
                 c.execute('''INSERT INTO cadres (
                     name, gender, birth, nation, native_place, id_card, phone, office_phone, office_address, emp_no,
-                    dept_post, level, cadre_rank, politic, status, remark
-                ) VALUES (?, ?, ?, '汉族', '—', '—', ?, '—', '—', '', ?, ?, ?, '中共党员', '在岗', '增量比对导入')''',
+                    dept_post, level, cadre_rank, politic, party_date, status, remark
+                ) VALUES (?, ?, ?, '汉族', '—', '—', ?, '—', '—', '', ?, ?, ?, ?, ?, '在岗', '增量比对导入')''',
                 (payload["name"], payload["gender"], payload["birth"], payload["phone"],
-                 payload["dept_post"], payload["level"], payload["cadre_rank"]))
+                 payload["dept_post"], payload["level"], payload["cadre_rank"],
+                 payload.get("politic", ""), payload.get("party_date", "—")))
                 inserted_cnt += 1
             elif action == "update":
-                c.execute('''UPDATE cadres SET dept_post = ?, level = ?, phone = ? WHERE id = ?''',
-                          (payload["dept_post"], payload["level"], payload["phone"], payload["id"]))
+                if "politic" in payload:
+                    c.execute('''UPDATE cadres SET dept_post = ?, level = ?, phone = ?, politic = ?, party_date = ? WHERE id = ?''',
+                              (payload["dept_post"], payload["level"], payload["phone"], payload["politic"], payload.get("party_date", "—"), payload["id"]))
+                else:
+                    c.execute('''UPDATE cadres SET dept_post = ?, level = ?, phone = ? WHERE id = ?''',
+                              (payload["dept_post"], payload["level"], payload["phone"], payload["id"]))
                 updated_cnt += 1
 
         conn.commit()
@@ -2439,6 +2505,7 @@ class FullCadreMainWindow(QMainWindow):
             gender_idx = get_col_idx(["性别"])
             birth_idx = get_col_idx(["出生年月", "出生日期", "出生"])
             phone_idx = get_col_idx(["手机", "移动电话", "联系方式"])
+            politic_idx = get_col_idx(["政治面貌", "政治", "面貌"])
 
             if name_idx == -1:
                 QMessageBox.critical(self, "格式错误", "未在Excel前5行中识别到【姓名】表头！")
@@ -2464,6 +2531,8 @@ class FullCadreMainWindow(QMainWindow):
                 brth_raw = ws.cell(row=r, column=birth_idx + 1).value if birth_idx != -1 else "—"
                 brth = brth_raw.strftime("%Y年%m月") if isinstance(brth_raw, datetime.datetime) else str(brth_raw or "—").strip()
                 ph = str(ws.cell(row=r, column=phone_idx + 1).value or "—").strip() if phone_idx != -1 else "—"
+                raw_pol = ws.cell(row=r, column=politic_idx + 1).value if politic_idx != -1 else ""
+                pol = str(raw_pol).strip() if raw_pol and str(raw_pol).strip() not in ["None", "—", "-"] else ""
 
                 chu_cat = ""
                 if cat_idx != -1: chu_cat = str(ws.cell(row=r, column=cat_idx + 1).value or "").strip()
@@ -2486,7 +2555,8 @@ class FullCadreMainWindow(QMainWindow):
                             "action": "insert",
                             "name": name, "gender": gdr, "birth": brth, "phone": ph,
                             "dept_post": dept_post, "level": lvl, "cadre_rank": "处级",
-                            "chu_category": chu_cat, "charge_division": charge_div
+                            "chu_category": chu_cat, "charge_division": charge_div,
+                            "politic": pol
                         }
                     })
                 else:
@@ -2540,8 +2610,8 @@ class FullCadreMainWindow(QMainWindow):
                             name, gender, birth, nation, native_place, id_card, phone, office_phone, office_address, emp_no,
                             dept_post, level, cadre_rank, chu_category, charge_division,
                             politic, status, remark
-                        ) VALUES (?, ?, ?, '汉族', '—', '—', ?, '—', '—', '', ?, ?, '处级', ?, ?, '中共党员', '在岗', '批量导入处级名册')''',
-                        (pl["name"], pl["gender"], pl["birth"], pl["phone"], pl["dept_post"], pl["level"], pl["chu_category"], pl["charge_division"]))
+                        ) VALUES (?, ?, ?, '汉族', '—', '—', ?, '—', '—', '', ?, ?, '处级', ?, ?, ?, '在岗', '批量导入处级名册')''',
+                        (pl["name"], pl["gender"], pl["birth"], pl["phone"], pl["dept_post"], pl["level"], pl["chu_category"], pl["charge_division"], pl.get("politic", "")))
                         ins_c += 1
                     elif pl["action"] == "update_chu":
                         c.execute('''UPDATE cadres SET dept_post = ?, level = ?, chu_category = ?, charge_division = ?, phone = ? WHERE id = ?''',
