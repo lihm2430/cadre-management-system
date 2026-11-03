@@ -1082,6 +1082,11 @@ class FullCadreMainWindow(QMainWindow):
         btn_upload_chu_doc.setStyleSheet("background-color: #1E40AF; color: white; border-radius: 6px; padding: 0 10px;")
         btn_upload_chu_doc.clicked.connect(self.upload_chu_appointment_doc)
 
+        btn_download_chu_tpl = QPushButton("📋 下载导入模版")
+        btn_download_chu_tpl.setFixedHeight(30)
+        btn_download_chu_tpl.setStyleSheet("background-color: #475569; color: white; border-radius: 6px; padding: 0 10px;")
+        btn_download_chu_tpl.clicked.connect(self.download_chu_template)
+
         btn_import_chu_xls = QPushButton("📥 批量导入处级名册(Excel)")
         btn_import_chu_xls.setFixedHeight(30)
         btn_import_chu_xls.setStyleSheet("background-color: #0284C7; color: white; border-radius: 6px; padding: 0 10px;")
@@ -1092,6 +1097,7 @@ class FullCadreMainWindow(QMainWindow):
         self.chu_toolbar_layout.addStretch()
         self.chu_toolbar_layout.addWidget(btn_add_chu)
         self.chu_toolbar_layout.addWidget(btn_upload_chu_doc)
+        self.chu_toolbar_layout.addWidget(btn_download_chu_tpl)
         self.chu_toolbar_layout.addWidget(btn_import_chu_xls)
 
         console_l.addWidget(self.chu_toolbar_frame)
@@ -2478,6 +2484,91 @@ class FullCadreMainWindow(QMainWindow):
             f"• 界面各研判专区与表格已即时完成同步刷新！"
         )
 
+    def download_chu_template(self):
+        tpl_name = "处级干部名册(标准模板).xlsx"
+        src_path = os.path.join(BASE_DIR, "导入数据模板样例", tpl_name)
+        if not os.path.exists(src_path):
+            src_path = os.path.join(BASE_DIR, tpl_name)
+
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "导出/保存处级干部导入模板", os.path.join(BASE_DIR, tpl_name), "Excel 表格 (*.xlsx)"
+        )
+        if not save_path:
+            return
+
+        try:
+            if os.path.exists(src_path):
+                import shutil
+                shutil.copyfile(src_path, save_path)
+            else:
+                self.generate_chu_template(save_path)
+
+            res = QMessageBox.information(
+                self, "模板获取成功",
+                f"🎉 《处级干部名册（标准模板）》已成功导出！\n\n"
+                f"• 保存路径：{save_path}\n"
+                f"• 表格包含姓名、职务、级别、处级归口类别、分管业务、政治面貌等规范表头及填写示例。\n"
+                f"• 您可以在此模板中录入或粘贴处级干部信息，完成后点击【📥 批量导入处级名册(Excel)】即可一键入库。\n\n"
+                f"是否立即打开该 Excel 模板表格？",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+            )
+            if res == QMessageBox.Yes:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(save_path))
+        except Exception as e:
+            QMessageBox.critical(self, "生成失败", f"导出模板发生异常: {e}")
+
+    def generate_chu_template(self, target_path):
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = '处级干部名册'
+        ws.views.sheetView[0].showGridLines = True
+        hdr_fill = PatternFill(start_color='1E3A8A', end_color='1E3A8A', fill_type='solid')
+        hdr_font = Font(name='微软雅黑', size=11, bold=True, color='FFFFFF')
+        sub_font = Font(name='微软雅黑', size=9, color='64748B')
+        title_font = Font(name='微软雅黑', size=15, bold=True, color='1E293B')
+        data_font = Font(name='微软雅黑', size=10, color='0F172A')
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'), right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'), bottom=Side(style='thin', color='CBD5E1')
+        )
+        ws.merge_cells('A1:J1')
+        ws['A1'] = '医院/单位处级领导干部名册（标准导入模板）'
+        ws['A1'].font = title_font
+        ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 40
+        ws.merge_cells('A2:J2')
+        ws['A2'] = '填报说明：1. 带【*】为核心必填项；2.【政治面貌】为中共党员、民主党派或空白（非党员留空即可）；3.【归口类别】支持：单位领导班子、直属/分支机构领导、专业内设机构领导（留空可按职务自动识别）。'
+        ws['A2'].font = sub_font
+        ws['A2'].alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[2].height = 24
+        headers = ['序号', '姓名 *', '性别', '出生年月', '政治面貌', '工作部门及职务 *', '职务级别', '处级归口类别', '分管业务', '联系电话']
+        for col_idx, h in enumerate(headers, start=1):
+            cell = ws.cell(row=3, column=col_idx, value=h)
+            cell.fill = hdr_fill; cell.font = hdr_font
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            cell.border = thin_border
+        ws.row_dimensions[3].height = 28
+        sample_data = [
+            [1, '张书记', '男', '1968.10', '中共党员', '党委书记', '正处级', '单位领导班子', '主持党委全面工作，主管党建、干部工作', '13900001111'],
+            [2, '李院长', '男', '1970.05', '中共党员', '院长、党委副书记', '正处级', '单位领导班子', '主持行政全面工作，主管医疗、审计工作', '13900002222'],
+            [3, '王副书记', '女', '1973.12', '中共党员', '党委副书记、纪委书记', '副处级', '单位领导班子', '分管纪检监察、党风廉政、巡视巡察工作', '13900003333'],
+            [4, '赵副院长', '男', '1975.08', '九三学社社员', '副院长', '副处级', '单位领导班子', '分管科研、教学、学科建设与国际交流', '13900004444'],
+            [5, '钱所长', '女', '1978.03', '', '临床医学研究所所长', '正处级', '直属/分支机构领导', '主持研究所科研业务与平台实验室管理', '13900005555'],
+            [6, '孙院长', '男', '1976.11', '中共党员', '第一临床医学院执行院长', '副处级', '专业内设机构领导', '主持学院教学、学生思政及规培基地建设', '13900006666'],
+        ]
+        for r_idx, row in enumerate(sample_data, start=4):
+            for c_idx, val in enumerate(row, start=1):
+                cell = ws.cell(row=r_idx, column=c_idx, value=val)
+                cell.font = data_font; cell.border = thin_border
+                cell.alignment = Alignment(horizontal='center', vertical='center') if c_idx in [1, 3, 4, 5, 7, 8, 10] else Alignment(horizontal='left', vertical='center')
+            ws.row_dimensions[r_idx].height = 22
+        col_widths = {'A': 8, 'B': 12, 'C': 8, 'D': 14, 'E': 14, 'F': 26, 'G': 12, 'H': 20, 'I': 38, 'J': 16}
+        for col_letter, w in col_widths.items():
+            ws.column_dimensions[col_letter].width = w
+        wb.save(target_path)
+
     def batch_import_chu_excel(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "请选择处级干部名册Excel表格", BASE_DIR, "Excel 表格 (*.xlsx *.xls)")
         if not file_path: return
@@ -2504,7 +2595,7 @@ class FullCadreMainWindow(QMainWindow):
             charge_idx = get_col_idx(["分管", "分管工作", "分管业务", "分管部门", "分工"])
             gender_idx = get_col_idx(["性别"])
             birth_idx = get_col_idx(["出生年月", "出生日期", "出生"])
-            phone_idx = get_col_idx(["手机", "移动电话", "联系方式"])
+            phone_idx = get_col_idx(["手机", "移动电话", "联系方式", "联系电话", "电话"])
             politic_idx = get_col_idx(["政治面貌", "政治", "面貌"])
 
             if name_idx == -1:
