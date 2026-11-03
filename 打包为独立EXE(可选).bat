@@ -11,7 +11,7 @@ python -m pip install pyinstaller -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 echo.
 echo 正在开始单文件打包 (预计耗时 1-3 分钟，请稍候)...
-pyinstaller --noconfirm --clean --onefile --windowed --name "干部任免检索系统" --add-data "XXX干部任免审批表(模板).docx;." --hidden-import "cadre_core" --hidden-import "rapidocr_onnxruntime" --hidden-import "openpyxl" --hidden-import "docx" --hidden-import "pypdf" --hidden-import "PySide6.QtPrintSupport" "干部任免检索系统.py"
+pyinstaller --noconfirm --clean --onefile --windowed --name "干部任免检索系统" --add-data "XXX干部任免审批表(模板).docx;." --hidden-import "cadre_core" --hidden-import "openpyxl" --hidden-import "docx" --hidden-import "pypdf" --hidden-import "PySide6.QtPrintSupport" "干部任免检索系统.py"
 
 echo.
 if %errorlevel% equ 0 (
